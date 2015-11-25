@@ -1,0 +1,34 @@
+{
+  "name": "skyrpcclient",
+  "version": "0.1.0",
+  "description": "Remotely resolve and call a SkyAPI-registered JSON-RPC endpoint.",
+  "main": "client.js",
+  "directories": {
+    "test": "tests"
+  },
+  "devDependencies": {
+    "deferred": "^0.7.2",
+    "nodeunit": "^0.9.1"
+  },
+  "dependencies": {
+    "levenlabs-log": "~0.1.0",
+    "rpclib": "~0.2.2",
+    "srvclient": "^0.0.3"
+  },
+  "scripts": {
+    "test": "nodeunit tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/fastest963/node-skyrpcclient.git"
+  },
+  "keywords": [
+    "rpc",
+    "jsonrpc",
+    "skyapi",
+    "client"
+  ],
+  "author": "James Hartig <fastest963@gmail.com>",
+  "license": "MIT",
+  "readmeFilename": "README.md"
+}
