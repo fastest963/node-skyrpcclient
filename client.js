@@ -33,12 +33,13 @@ SkyRPCClient.prototype.resolve = function(cb) {
     log.debug('skyRPCClient resolving', {hostname: this.hostname});
     SRVClient.getRandomTargets(this.hostname, 1000, function(err, targets) {
         if (err || !targets) {
-            //todo: somehow error?
             log.error('error with lookup in skyRPCClient', {error: err, hostname: this.hostname});
-            targets = [];
+            this.targets = [];
+            cb(err || (new Error('error looking up ' + this.hostname)));
+            return;
         }
         this.targets = targets;
-        cb(this.targets);
+        cb(null, this.targets);
     }.bind(this));
 };
 
