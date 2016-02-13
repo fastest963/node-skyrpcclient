@@ -33,7 +33,8 @@ This is just an alias for `getRandomTargets` from `node-srvclient`.
 ### call = client.call(name, params, callback) ###
 
 calls a remote method `name` and passes `params`. `callback` is called with
-an error and result. returns an instance of `RPCResult`.
+an error and result. returns an instance of `RPCResult` which can be treated
+like a promise.
 
 ### SkyRPCClient.setHostnameHandler(hostname, callback) ###
 
@@ -47,6 +48,9 @@ called with `name, params, callback` and directly maps to the args sent to
 Set the DNS servers to use for resolution. Identical to [dns.setServers](https://nodejs.org/api/dns.html#dns_dns_setservers_servers)
 
 ## RPCResult Methods ##
+
+`RPCResult` has `then` and `catch` methods and behaves like a promise.
+Additionally...
 
 ### call.setTimeout(ms) ###
 

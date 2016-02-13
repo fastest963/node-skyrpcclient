@@ -40,6 +40,17 @@ exports.call = function(test) {
     }).setTimeout(5000);
 };
 
+exports.callPromise = function(test) {
+    test.expect(1);
+    var client = new SkyRPCClient(rpcHostname);
+    client.call('Fancy.Echo', {text: 'hey'}).setTimeout(5000).then(function(res) {
+        if (res) {
+            test.equal(res.text, 'hey');
+        }
+        test.done();
+    });
+};
+
 exports.timeout = function(test) {
     test.expect(1);
     var client = new SkyRPCClient(timeoutHostname);

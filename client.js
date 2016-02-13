@@ -88,8 +88,25 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
     var callback = cb,
         parameters = params,
         clientRes = null,
+        promiseResolve = function(res) {
+            resolvedRes = res;
+        },
+        promiseReject = function(err) {
+            rejectedErr = err;
+        },
+        promise = new Promise(function(resolve, reject) {
+            promiseResolve = resolve;
+            promiseReject = reject;
+            // if we already resolved before this ever ran... call
+            // resolve/reject now
+            if (resolvedRes !== undefined) {
+                resolve(resolvedRes);
+            } else if (rejectedErr !== undefined) {
+                reject(rejectedErr);
+            }
+        }.bind(this)),
         // create a wrapper calback to send to callWithTarget so we know when it ends so we can end clientRes
-        wrapperCb = function(err, res) {
+        ourResolve = function(err, res) {
             if (clientRes) {
                 //fallback in case res was ended already
                 if (clientRes.ended) {
@@ -101,18 +118,28 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
                 }
                 clientRes.ended = true;
             }
-            callback(err, res);
-        };
+            if (err) {
+                promiseReject(err);
+            } else {
+                promiseResolve(res);
+            }
+            if (callback) {
+                var cb = callback;
+                callback = null;
+                cb(err, res);
+            }
+        },
+        resolvedRes, rejectedErr;
     if (typeof params === 'function') {
         callback = params;
         parameters = null;
     }
-    if (typeof callback !== 'function') {
+    if (callback && typeof callback !== 'function') {
         throw new TypeError('callback sent to SkyRPCClient.call must be a function');
     }
-    clientRes = new RPCResult(callback);
+    clientRes = new RPCResult(callback, promise);
     if (SkyRPCClient.localHandlers.hasOwnProperty(this.hostname)) {
-        SkyRPCClient.localHandlers[this.hostname](name, parameters, wrapperCb);
+        SkyRPCClient.localHandlers[this.hostname](name, parameters, ourResolve);
         return clientRes;
     }
     this.resolve(function() {
@@ -120,9 +147,9 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
             return;
         }
         //if callWithTarget returns false it didn't call the callback... weird i know
-        if (!callWithTarget(this, name, parameters, wrapperCb, clientRes, 0)) {
+        if (!callWithTarget(this, name, parameters, ourResolve, clientRes, 0)) {
             log.warn('failed to lookup in skyRPCClient', {hostname: this.hostname, method: name});
-            wrapperCb({
+            ourResolve({
                 type: 'dns',
                 code: RPCLib.ERROR_SERVER_ERROR,
                 message: 'Cannot lookup hostname'
@@ -132,12 +159,13 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
     return clientRes;
 };
 
-function RPCResult(resolve) {
+function RPCResult(resolve, promise) {
     this._resolve = resolve || noop;
     this._rpcResult = null; //rpcResult from node-rpclib
     this.timer = null;
     this.timeout = 0;
     this.ended = false;
+    this._promise = promise;
 }
 RPCResult.prototype._setRPCResult = function(res) {
     if (this.ended) {
@@ -197,6 +225,12 @@ RPCResult.prototype.setTimeout = function(timeout) {
         }.bind(this), this.timeout);
     }
     return this;
+};
+RPCResult.prototype.then = function(res, cat) {
+    return this._promise.then(res, cat);
+};
+RPCResult.prototype.catch = function(cat) {
+    return this._promise.catch(cat);
 };
 
 SkyRPCClient.RPCResult = RPCResult;
