@@ -1,6 +1,6 @@
 {
   "name": "skyrpcclient",
-  "version": "0.2.0",
+  "version": "0.3.0-beta",
   "description": "Remotely resolve and call a SkyAPI-registered JSON-RPC endpoint.",
   "main": "client.js",
   "directories": {
