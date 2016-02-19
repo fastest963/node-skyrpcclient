@@ -1,14 +1,15 @@
 var util = require('util'),
     SRVClient = require('srvclient'),
     RPCLib = require('rpclib'),
-    log = require('levenlabs-log'),
+    Log = require('modulelog')('skyrpcclient'),
     RPCClient = RPCLib.RPCClient,
     noop = function() {};
 
 function SkyRPCClient(hostname) {
     this.hostname = hostname;
-    this.targets = [];
+    this.targets = null;
     this.rpcClient = new RPCClient();
+    this.fallbackOnDNSError = true;
 }
 SkyRPCClient.setDNSServers = function(servers) {
     SRVClient.setServers(servers);
@@ -29,17 +30,30 @@ SkyRPCClient.setHostnameHandler = function(hostname, callback) {
     SkyRPCClient.localHandlers[hostname] = callback;
 };
 
-SkyRPCClient.prototype.resolve = function(cb) {
-    log.debug('skyRPCClient resolving', {hostname: this.hostname});
-    SRVClient.getRandomTargets(this.hostname, 1000, function(err, targets) {
+SkyRPCClient.prototype.resolve = function(cache, cb) {
+    var callback = cb;
+    if (typeof cache === 'function') {
+        callback = cache;
+        cache = 1000;
+    }
+    Log.debug('skyRPCClient resolving', {hostname: this.hostname});
+    SRVClient.getRandomTargets(this.hostname, +cache, function(err, targets) {
         if (err || !targets) {
-            log.error('error with lookup in skyRPCClient', {error: err, hostname: this.hostname});
-            this.targets = [];
-            cb(err || (new Error('error looking up ' + this.hostname)));
+            if (this.fallbackOnDNSError && this.targets) {
+                Log.info('falling back to cached dns targets', {
+                    error: err,
+                    hostname: this.hostname
+                });
+                callback(null, this.targets);
+                return;
+            }
+            Log.error('skyRPCClient error with lookup', {error: err, hostname: this.hostname});
+            this.targets = null;
+            callback(err || (new Error('error looking up ' + this.hostname)));
             return;
         }
         this.targets = targets;
-        cb(null, this.targets);
+        callback(null, this.targets);
     }.bind(this));
 };
 
@@ -58,23 +72,23 @@ function callWithTarget(client, name, params, cb, clientRes, idx) {
             return;
         }
         if (err) {
-            log.warn('error resolving target in skyRPCClient', {error: err, method: name});
+            Log.warn('error resolving target in skyRPCClient', {error: err, method: name});
             if (!callWithTarget(client, name, params, cb, clientRes, index + 1)) {
                 //send along the last err we got since we don't have any targets left
-                log.error('skyRPCClient failed to find any more targets', {method: name});
+                Log.error('skyRPCClient failed to find any more targets', {method: name});
                 cb(err, null);
             }
             return;
         }
         var url = 'http://' + address + ':' + target.port + '/';
-        log.debug('skyRPCClient calling method on service', {url: url, method: name});
+        Log.debug('skyRPCClient resolved address', {url: url, hostname: this.hostname});
         client.rpcClient.setEndpoint(url);
         clientRes._setRPCResult(client.rpcClient.call(name, params, function(err, result) {
             if (err && (err.type === 'http' || err.type === 'json' || err.type === 'timeout')) {
-                log.warn('skyRPCClient error connecting to service', {error: err, url: url, method: name});
+                Log.warn('skyRPCClient error connecting to service', {error: err, url: url, method: name});
                 if (!callWithTarget(client, name, params, cb, clientRes, index + 1)) {
                     //send along the last err we got since we don't have any targets left
-                    log.error('skyRPCClient failed to find any more targets', {method: name, url: url});
+                    Log.error('skyRPCClient failed to find any more targets', {method: name, url: url});
                     cb(err, null);
                 }
                 return;
@@ -137,6 +151,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
     if (callback && typeof callback !== 'function') {
         throw new TypeError('callback sent to SkyRPCClient.call must be a function');
     }
+    Log.debug('skyRPCClient calling method', {hostname: this.hostname, func: name});
     clientRes = new RPCResult(callback, promise);
     if (SkyRPCClient.localHandlers.hasOwnProperty(this.hostname)) {
         SkyRPCClient.localHandlers[this.hostname](name, parameters, ourResolve);
@@ -148,7 +163,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
         }
         //if callWithTarget returns false it didn't call the callback... weird i know
         if (!callWithTarget(this, name, parameters, ourResolve, clientRes, 0)) {
-            log.warn('failed to lookup in skyRPCClient', {hostname: this.hostname, method: name});
+            Log.warn('failed to lookup in skyRPCClient', {hostname: this.hostname, method: name});
             ourResolve({
                 type: 'dns',
                 code: RPCLib.ERROR_SERVER_ERROR,

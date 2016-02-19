@@ -8,11 +8,13 @@ var dns = require('dns'),
 exports.setDNSServers = function(test) {
     var servers;
     SkyRPCClient.setDNSServers(dnsServers);
-    servers = dns.getServers();
+    // todo: uncomment these once srvclient has getServers()
+    /*servers = dns.getServers();
     test.equal(servers[0], dnsServers[0]);
-    test.equal(servers[1], dnsServers[1]);
+    test.equal(servers[1], dnsServers[1]);*/
     test.done();
 };
+
 
 exports.resolve = function(test) {
     test.expect(4);
@@ -26,6 +28,23 @@ exports.resolve = function(test) {
             ports.splice(i, 1);
         });
         test.done();
+    });
+};
+
+exports.resolveCache = function(test) {
+    test.expect(1);
+    var client = new SkyRPCClient(testHostname);
+    client.resolve(function(err, targets) {
+        var ogTargets = targets;
+        SkyRPCClient.setDNSServers(['255.255.255.255']);
+        function onlyName(t) {
+            return t.name;
+        }
+        client.resolve(function(err, targets) {
+            test.equal(targets.map(onlyName).join(','), ogTargets.map(onlyName).join(','));
+            test.done();
+        });
+        SkyRPCClient.setDNSServers(dnsServers);
     });
 };
 
@@ -76,4 +95,33 @@ exports.setHostnameHandler = function(test) {
         SkyRPCClient.setHostnameHandler(rpcHostname);
         test.done();
     }).setTimeout(100);
+};
+
+exports.resolveFallback = function(test) {
+    test.expect(1);
+    var client = new SkyRPCClient(testHostname);
+    client.resolve(0, function(err, targets) {
+        var ogTargets = targets;
+        SkyRPCClient.setDNSServers(['10.254.254.10']);
+        client.resolve(0, function(err, targets) {
+            test.strictEqual(targets, ogTargets);
+            test.done();
+        });
+        SkyRPCClient.setDNSServers(dnsServers);
+    });
+};
+
+exports.resolveNoFallback = function(test) {
+    test.expect(1);
+    var client = new SkyRPCClient(testHostname);
+    client.fallbackOnDNSError = false;
+    client.resolve(0, function(err, targets) {
+        var ogTargets = targets;
+        SkyRPCClient.setDNSServers(['10.254.254.10']);
+        client.resolve(0, function(err, targets) {
+            test.equal(null, targets);
+            test.done();
+        });
+        SkyRPCClient.setDNSServers(dnsServers);
+    });
 };

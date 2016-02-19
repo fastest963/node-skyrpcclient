@@ -36,6 +36,9 @@ calls a remote method `name` and passes `params`. `callback` is called with
 an error and result. returns an instance of `RPCResult` which can be treated
 like a promise.
 
+**Note By default, `call` will use the last DNS answer if a subsequent lookup
+fails. To disable this functionality, set client.fallbackOnDNSError to false.**
+
 ### SkyRPCClient.setHostnameHandler(hostname, callback) ###
 
 overrides any clients created for `hostname` to call `callback` instead of
