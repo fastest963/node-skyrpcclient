@@ -1,6 +1,6 @@
 {
   "name": "skyrpcclient",
-  "version": "0.3.0-beta",
+  "version": "0.3.0-beta2",
   "description": "Remotely resolve and call a SkyAPI-registered JSON-RPC endpoint.",
   "main": "client.js",
   "directories": {
@@ -13,7 +13,7 @@
   "dependencies": {
     "modulelog": "^0.2.2",
     "rpclib": "^0.3.0",
-    "srvclient": "^0.0.4-beta"
+    "srvclient": "^0.1.0-beta1"
   },
   "scripts": {
     "test": "nodeunit tests"
