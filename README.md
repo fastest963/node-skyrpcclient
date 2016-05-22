@@ -33,8 +33,8 @@ This is just an alias for `getRandomTargets` from `node-srvclient`.
 ### call = client.call(name, params, callback) ###
 
 calls a remote method `name` and passes `params`. `callback` is called with
-an error and result. returns an instance of `RPCResult` which can be treated
-like a promise.
+an error and result. returns an instance of `RPCClientResult` which can be
+treated like a promise.
 
 **Note By default, `call` will use the last DNS answer if a subsequent lookup
 fails. To disable this functionality, set client.fallbackOnDNSError to false.**
@@ -50,12 +50,6 @@ called with `name, params, callback` and directly maps to the args sent to
 
 Set the DNS servers to use for resolution. Identical to [dns.setServers](https://nodejs.org/api/dns.html#dns_dns_setservers_servers)
 
-## RPCResult Methods ##
+## RPCClientResult Methods ##
 
-`RPCResult` has `then` and `catch` methods and behaves like a promise.
-Additionally...
-
-### call.setTimeout(ms) ###
-
-timeout the call after `ms` milliseconds. The callback passed to `call` will
-get passed an error with a `type` of `timeout` after the timeout has passed.
+See [RPCClientResult Methods](https://github.com/fastest963/node-rpclib#rpcclientresult-methods)
