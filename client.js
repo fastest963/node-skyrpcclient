@@ -1,6 +1,7 @@
 var util = require('util'),
     SRVClient = require('srvclient'),
     RPCLib = require('rpclib'),
+    RPCClientResult = RPCLib.RPCClientResult,
     Log = require('modulelog')('skyrpcclient'),
     RPCClient = RPCLib.RPCClient,
     noop = function() {};
@@ -31,119 +32,53 @@ SkyRPCClient.setHostnameHandler = function(hostname, callback) {
 };
 
 SkyRPCClient.prototype.resolve = function(cache, cb) {
-    var callback = cb;
+    var callback = cb,
+        cacheMS = cache || 0;
     if (typeof cache === 'function') {
         callback = cache;
-        cache = 1000;
+        cacheMS = 1000;
     }
     Log.debug('skyRPCClient resolving', {hostname: this.hostname});
-    SRVClient.getRandomTargets(this.hostname, +cache, function(err, targets) {
-        if (err || !targets) {
-            if (this.fallbackOnDNSError && this.targets) {
-                Log.info('falling back to cached dns targets', {
-                    error: err,
-                    hostname: this.hostname
-                });
-                callback(null, this.targets);
+    return new Promise(function(resolve, reject) {
+        SRVClient.getRandomTargets(this.hostname, +cacheMS, function(err, targets) {
+            if (err || !targets) {
+                if (this.fallbackOnDNSError && this.targets) {
+                    Log.info('falling back to cached dns targets', {
+                        error: err,
+                        hostname: this.hostname
+                    });
+                    callback(null, this.targets);
+                    return;
+                }
+                Log.error('skyRPCClient error with lookup', {error: err, hostname: this.hostname});
+                this.targets = null;
+                reject(err || (new Error('error looking up ' + this.hostname)));
                 return;
             }
-            Log.error('skyRPCClient error with lookup', {error: err, hostname: this.hostname});
-            this.targets = null;
-            callback(err || (new Error('error looking up ' + this.hostname)));
-            return;
+            this.targets = targets;
+            resolve(this.targets);
+        }.bind(this));
+    }.bind(this)).then(function(res) {
+        if (callback) {
+            callback(null, res);
         }
-        this.targets = targets;
-        callback(null, this.targets);
-    }.bind(this));
+        return res;
+    }, function(err) {
+        if (callback) {
+            callback(err, null);
+        }
+        throw err;
+    });
 };
 
-function callWithTarget(client, name, params, cb, clientRes, idx) {
-    var index = idx || 0,
-        target = client.targets[index];
-    if (!target) {
-        return false;
-    }
-    //the result already ended so no point in continuing and respond that we didn't fail (read: succeeded)
-    if (clientRes.ended) {
-        return true;
-    }
-    target.resolve(function(err, address) {
-        if (clientRes.ended) {
-            return;
-        }
-        if (err) {
-            Log.warn('error resolving target in skyRPCClient', {error: err, method: name});
-            if (!callWithTarget(client, name, params, cb, clientRes, index + 1)) {
-                //send along the last err we got since we don't have any targets left
-                Log.error('skyRPCClient failed to find any more targets', {method: name});
-                cb(err, null);
-            }
-            return;
-        }
-        var url = 'http://' + address + ':' + target.port + '/';
-        Log.debug('skyRPCClient resolved address', {url: url, hostname: this.hostname});
-        client.rpcClient.setEndpoint(url);
-        clientRes._setRPCResult(client.rpcClient.call(name, params, function(err, result) {
-            if (err && (err.type === 'http' || err.type === 'json' || err.type === 'timeout')) {
-                Log.warn('skyRPCClient error connecting to service', {error: err, url: url, method: name});
-                if (!callWithTarget(client, name, params, cb, clientRes, index + 1)) {
-                    //send along the last err we got since we don't have any targets left
-                    Log.error('skyRPCClient failed to find any more targets', {method: name, url: url});
-                    cb(err, null);
-                }
-                return;
-            }
-            cb(err, result);
-        }));
-    });
-    return true;
-}
 SkyRPCClient.prototype.call = function(name, params, cb) {
     var callback = cb,
         parameters = params,
-        clientRes = null,
-        promiseResolve = function(res) {
-            resolvedRes = res;
-        },
-        promiseReject = function(err) {
-            rejectedErr = err;
-        },
-        promise = new Promise(function(resolve, reject) {
-            promiseResolve = resolve;
-            promiseReject = reject;
-            // if we already resolved before this ever ran... call
-            // resolve/reject now
-            if (resolvedRes !== undefined) {
-                resolve(resolvedRes);
-            } else if (rejectedErr !== undefined) {
-                reject(rejectedErr);
-            }
-        }.bind(this)),
-        // create a wrapper calback to send to callWithTarget so we know when it ends so we can end clientRes
-        ourResolve = function(err, res) {
-            if (clientRes) {
-                //fallback in case res was ended already
-                if (clientRes.ended) {
-                    return;
-                }
-                //clear any timer that was set
-                if (clientRes.timeout > 0) {
-                    clientRes.setTimeout(0);
-                }
-                clientRes.ended = true;
-            }
-            if (err) {
-                promiseReject(err);
-            } else {
-                promiseResolve(res);
-            }
-            if (callback) {
-                var cb = callback;
-                callback = null;
-                cb(err, res);
-            }
-        },
-        resolvedRes, rejectedErr;
+        ended = false,
+        client = this,
+        existingError = null,
+        promiseReject = noop,
+        rpcClientRes = null;
     if (typeof params === 'function') {
         callback = params;
         parameters = null;
@@ -151,102 +86,124 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
     if (callback && typeof callback !== 'function') {
         throw new TypeError('callback sent to SkyRPCClient.call must be a function');
     }
+
     Log.debug('skyRPCClient calling method', {hostname: this.hostname, func: name});
-    clientRes = new RPCResult(callback, promise);
-    if (SkyRPCClient.localHandlers.hasOwnProperty(this.hostname)) {
-        SkyRPCClient.localHandlers[this.hostname](name, parameters, ourResolve);
-        return clientRes;
+
+    function onEnd() {
+        ended = true;
+        if (rpcClientRes) {
+            // this will clear the timeout
+            rpcClientRes.setTimeout(0);
+            rpcClientRes = null;
+        }
     }
-    this.resolve(function() {
-        if (clientRes.ended) {
+
+    function errFn(err) {
+        if (rpcClientRes) {
+            rpcClientRes.abort();
+        }
+        if (err) {
+            existingError = err;
+            promiseReject(err);
+        } else {
+            onEnd();
+        }
+    }
+
+    function promiseHandler(resolve, reject) {
+        if (ended) {
             return;
         }
-        //if callWithTarget returns false it didn't call the callback... weird i know
-        if (!callWithTarget(this, name, parameters, ourResolve, clientRes, 0)) {
-            Log.warn('failed to lookup in skyRPCClient', {hostname: this.hostname, method: name});
-            ourResolve({
-                type: 'dns',
-                code: RPCLib.ERROR_SERVER_ERROR,
-                message: 'Cannot lookup hostname'
-            }, null);
+        if (existingError) {
+            reject(existingError);
+            return;
         }
-    }.bind(this));
-    return clientRes;
-};
+        promiseReject = reject;
 
-function RPCResult(resolve, promise) {
-    this._resolve = resolve || noop;
-    this._rpcResult = null; //rpcResult from node-rpclib
-    this.timer = null;
-    this.timeout = 0;
-    this.ended = false;
-    this._promise = promise;
-}
-RPCResult.prototype._setRPCResult = function(res) {
-    if (this.ended) {
-        return this;
-    }
-    //stop our timer since we're going to use rpcResult's
-    if (this.timer !== null) {
-        clearTimeout(this.timer);
-        this.timer = null;
-    }
-    if (res.ended) {
-        this.ended = true;
-        return this;
-    }
-    this._rpcResult = res;
-    this._rpcResult.setTimeout(this.timeout);
-    return this;
-};
-RPCResult.prototype.setTimeout = function(timeout) {
-    if (this.ended) {
-        return this;
-    }
-    if (this.timer !== null) {
-        clearTimeout(this.timer);
-        this.timer = null;
-    }
-    this.timeout = +timeout;
-    if (timeout > 0) {
-        if (this._rpcResult) {
-            this._rpcResult.setTimeout(timeout);
-            return this;
+        if (SkyRPCClient.localHandlers.hasOwnProperty(client.hostname)) {
+            SkyRPCClient.localHandlers[client.hostname](name, parameters, function(err, res) {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(res);
+                }
+            });
+            return;
         }
-        this.timer = setTimeout(function() {
-            if (this.ended) {
-                this.timer = null;
+        // first resolve our hostname
+        client.resolve(function(err) {
+            if (ended) {
                 return;
             }
-            this.ended = true;
-            if (this._rpcResult !== null) {
-                //if the rpcResult already ended then it must've called cb already
-                if (this._rpcResult.ended) {
-                    return;
-                }
-                var res = this._rpcResult;
-                this._rpcResult = null;
-                if (res.ended) {
-                    return;
-                }
-                res.abort();
+            if (err) {
+                Log.warn('failed to lookup in skyRPCClient', {hostname: client.hostname, method: name});
+                reject({
+                    type: 'dns',
+                    code: RPCLib.ERROR_SERVER_ERROR,
+                    message: 'Cannot lookup hostname'
+                });
+                return;
             }
-            //this matches node-rpclib
-            this._resolve({
-                type: 'timeout',
-                code: 0,
-                message: 'Timed out waiting for response'
-            }, null);
-        }.bind(this), this.timeout);
+
+            // now loop through and resolve all of the targets
+            var targets = client.targets || [];
+            (new Promise(function(targetResolve, targetReject) {
+                function resolveNext(index, lastError) {
+                    var target = targets[index];
+                    if (!target) {
+                        Log.error('skyRPCClient failed to find any more targets', {method: name, url: url});
+                        targetReject(lastError);
+                        return;
+                    }
+                    // the result already ended
+                    if (ended) {
+                        targetResolve();
+                        return;
+                    }
+                    target.resolve(function(targetErr, address) {
+                        if (ended) {
+                            targetResolve();
+                            return;
+                        }
+                        if (targetErr) {
+                            Log.warn('error resolving target in skyRPCClient', {error: targetErr, method: name});
+                            resolveNext(index + 1, targetErr);
+                            return;
+                        }
+                        var url = 'http://' + address + ':' + target.port + '/';
+                        Log.debug('skyRPCClient resolved address', {url: url, hostname: client.hostname});
+                        client.rpcClient.setEndpoint(url);
+                        rpcClientRes = client.rpcClient.call(name, parameters).then(targetResolve).catch(function(clientErr) {
+                            if (clientErr.type === 'http' || clientErr.type === 'json' || clientErr.type === 'timeout') {
+                                Log.warn('skyRPCClient error connecting to service', {error: clientErr, url: url, method: name});
+                                resolveNext(index + 1, clientErr);
+                                return;
+                            }
+                            targetReject(clientErr);
+                        });
+                    });
+                }
+                resolveNext(0, null);
+            })).then(resolve, reject);
+        });
     }
-    return this;
-};
-RPCResult.prototype.then = function(res, cat) {
-    return this._promise.then(res, cat);
-};
-RPCResult.prototype.catch = function(cat) {
-    return this._promise.catch(cat);
+
+    var promise = new Promise(promiseHandler).then(function(res) {
+        onEnd();
+        if (callback) {
+            callback(null, res);
+        }
+        return res;
+    }, function(err) {
+        onEnd();
+        if (callback) {
+            callback(err, null);
+        }
+        throw err;
+    });
+    rpcClientRes = new RPCClientResult(errFn, promise);
+    return rpcClientRes;
+
 };
 
-SkyRPCClient.RPCResult = RPCResult;
 module.exports = SkyRPCClient;

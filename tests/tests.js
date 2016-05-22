@@ -31,6 +31,21 @@ exports.resolve = function(test) {
     });
 };
 
+exports.resolvePromise = function(test) {
+    test.expect(4);
+    var client = new SkyRPCClient(testHostname);
+    client.resolve().then(function(targets) {
+        test.equal(targets.length, 3);
+        var ports = [8079, 8080, 8081];
+        targets.forEach(function(p) {
+            var i = ports.indexOf(p.port);
+            test.notEqual(i, -1);
+            ports.splice(i, 1);
+        });
+        test.done();
+    });
+};
+
 exports.resolveCache = function(test) {
     test.expect(1);
     var client = new SkyRPCClient(testHostname);
@@ -62,18 +77,27 @@ exports.call = function(test) {
 exports.callPromise = function(test) {
     test.expect(1);
     var client = new SkyRPCClient(rpcHostname);
-    client.call('Fancy.Echo', {text: 'hey'}).setTimeout(5000).then(function(res) {
+    client.call('Fancy.Echo', {text: 'hey'}).then(function(res) {
         if (res) {
             test.equal(res.text, 'hey');
         }
         test.done();
-    });
+    }).setTimeout(5000);
 };
 
 exports.timeout = function(test) {
     test.expect(1);
     var client = new SkyRPCClient(timeoutHostname);
     client.call('Fancy.Echo', {text: 'hey'}, function(err) {
+        test.equal(err.type, 'timeout');
+        test.done();
+    }).setTimeout(100);
+};
+
+exports.timeoutPromise = function(test) {
+    test.expect(1);
+    var client = new SkyRPCClient(timeoutHostname);
+    client.call('Fancy.Echo', {text: 'hey'}).catch(function(err) {
         test.equal(err.type, 'timeout');
         test.done();
     }).setTimeout(100);
