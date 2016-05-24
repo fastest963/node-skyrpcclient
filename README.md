@@ -39,6 +39,12 @@ treated like a promise.
 **Note By default, `call` will use the last DNS answer if a subsequent lookup
 fails. To disable this functionality, set client.fallbackOnDNSError to false.**
 
+### client.preprocess ###
+
+A function that can be used to filter/alter the results that get resolved as part
+of `call`. This function gets an array of [SRVTarget's](https://github.com/fastest963/node-srvclient)
+and expects a return of an array of `SRVTarget`'s.
+
 ### SkyRPCClient.setHostnameHandler(hostname, callback) ###
 
 overrides any clients created for `hostname` to call `callback` instead of

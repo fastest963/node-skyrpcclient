@@ -16,6 +16,10 @@ SkyRPCClient.setDNSServers = function(servers) {
     SRVClient.setServers(servers);
 };
 
+SkyRPCClient.prototype.preprocess = function(targets) {
+    return targets;
+};
+
 SkyRPCClient.localHandlers = {};
 SkyRPCClient.setHostnameHandler = function(hostname, callback) {
     if (typeof hostname !== 'string') {
@@ -55,7 +59,7 @@ SkyRPCClient.prototype.resolve = function(cache, cb) {
                 reject(err || (new Error('error looking up ' + this.hostname)));
                 return;
             }
-            this.targets = targets;
+            this.targets = this.preprocess(targets);
             resolve(this.targets);
         }.bind(this));
     }.bind(this)).then(function(res) {

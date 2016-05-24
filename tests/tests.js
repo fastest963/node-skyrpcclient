@@ -149,3 +149,27 @@ exports.resolveNoFallback = function(test) {
         SkyRPCClient.setDNSServers(dnsServers);
     });
 };
+
+exports.preprocess = function(test) {
+    test.expect(6);
+    var client = new SkyRPCClient(testHostname);
+    client.preprocess = function(targets) {
+        test.equal(targets.length, 3);
+        var ports = [8079, 8080, 8081],
+            newTargets = [];
+        targets.forEach(function(p) {
+            var i = ports.indexOf(p.port);
+            test.notEqual(i, -1);
+            ports.splice(i, 1);
+            if (p.port === 8079) {
+                newTargets.push(p);
+            }
+        });
+        return newTargets;
+    };
+    client.resolve(function(err, targets) {
+        test.equal(targets.length, 1);
+        test.equal(targets[0].port, 8079);
+        test.done();
+    });
+};
