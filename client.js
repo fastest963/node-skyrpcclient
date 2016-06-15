@@ -11,6 +11,7 @@ function SkyRPCClient(hostname) {
     this.targets = null;
     this.rpcClient = new RPCClient();
     this.fallbackOnDNSError = true;
+    this.retryOnError = false;
 }
 SkyRPCClient.setDNSServers = function(servers) {
     SRVClient.setServers(servers);
@@ -103,7 +104,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
     }
 
     function errFn(err) {
-        if (rpcClientRes) {
+        if (rpcClientRes && err !== null) {
             rpcClientRes.abort();
         }
         if (err) {
@@ -159,6 +160,11 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
                         targetReject(lastError);
                         return;
                     }
+                    if (!client.retryOnError && index > 0) {
+                        Log.error('skyRPCClient rejecting since retryOnError is false', {method: name, url: url});
+                        targetReject(lastError);
+                        return;
+                    }
                     // the result already ended
                     if (ended) {
                         targetResolve();
@@ -178,7 +184,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
                         Log.debug('skyRPCClient resolved address', {url: url, hostname: client.hostname});
                         client.rpcClient.setEndpoint(url);
                         rpcClientRes = client.rpcClient.call(name, parameters).then(targetResolve).catch(function(clientErr) {
-                            if (clientErr.type === 'http' || clientErr.type === 'json' || clientErr.type === 'timeout') {
+                            if (clientErr.type === 'http' || clientErr.type === 'json') {
                                 Log.warn('skyRPCClient error connecting to service', {error: clientErr, url: url, method: name});
                                 resolveNext(index + 1, clientErr);
                                 return;

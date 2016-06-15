@@ -3,7 +3,11 @@ var dns = require('dns'),
     testHostname = '_srv-client-test._tcp.mysuperfancyapi.com',
     rpcHostname = '_rpc._tcp.mysuperfancyapi.com',
     timeoutHostname = '_srv-client-test2._tcp.mysuperfancyapi.com',
+    retryHostname = '_rpc-retry._tcp.mysuperfancyapi.com',
+    Log = require('modulelog')('skyrpcclient'),
     dnsServers = ['8.8.8.8', '8.8.4.4'];
+
+Log.setClass('console');
 
 exports.setDNSServers = function(test) {
     var servers;
@@ -101,6 +105,26 @@ exports.timeoutPromise = function(test) {
         test.equal(err.type, 'timeout');
         test.done();
     }).setTimeout(100);
+};
+
+exports.retry = function(test) {
+    test.expect(2);
+    var client = new SkyRPCClient(retryHostname),
+        promises = [];
+    promises.push(client.call('Fancy.Echo', {text: 'hey'}).catch(function(err) {
+        test.equal(err.type, 'timeout');
+    }).setTimeout(100));
+
+    client = new SkyRPCClient(retryHostname);
+    client.retryOnError = true;
+    promises.push(client.call('Fancy.Echo', {text: 'hey'}).then(function(res) {
+        test.equal(res.text, 'hey');
+    }).setTimeout(1000));
+    Promise.all(promises).then(function() {
+        test.done();
+    }, function() {
+        test.done();
+    });
 };
 
 exports.setHostnameHandler = function(test) {

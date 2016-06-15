@@ -45,6 +45,19 @@ A function that can be used to filter/alter the results that get resolved as par
 of `call`. This function gets an array of [SRVTarget's](https://github.com/fastest963/node-srvclient)
 and expects a return of an array of `SRVTarget`'s.
 
+### client.fallbackOnDNSError ###
+
+By default if a DNS lookup fails, it falls back to the last received dns
+lookup. Set `fallbackOnDNSError` to false if you do not want this
+behavior.
+
+### client.retryOnError ###
+
+By default if a call fails because of an HTTP or JSON error, it will not be
+retried. Set `retryOnError` to true to try the next available server on HTTP
+and JSON errors. Valid RPC responses, even if they're an error, will NOT be
+retried in either case.
+
 ### SkyRPCClient.setHostnameHandler(hostname, callback) ###
 
 overrides any clients created for `hostname` to call `callback` instead of
