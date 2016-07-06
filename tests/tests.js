@@ -68,14 +68,16 @@ exports.resolveCache = function(test) {
 };
 
 exports.call = function(test) {
-    test.expect(1);
+    test.expect(3);
     var client = new SkyRPCClient(rpcHostname);
-    client.call('Fancy.Echo', {text: 'hey'}, function(err, res) {
+    var result = client.call('Fancy.Echo', {text: 'hey'}, function(err, res) {
         if (res) {
             test.equal(res.text, 'hey');
+            test.equal(result.clientURL, 'http://192.95.20.208:8190/');
         }
         test.done();
     }).setTimeout(5000);
+    test.equal(result.clientURL, '');
 };
 
 exports.callPromise = function(test) {

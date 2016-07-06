@@ -1,5 +1,4 @@
-var util = require('util'),
-    SRVClient = require('srvclient'),
+var SRVClient = require('srvclient'),
     RPCLib = require('rpclib'),
     RPCClientResult = RPCLib.RPCClientResult,
     Log = require('modulelog')('skyrpcclient'),
@@ -83,6 +82,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
         client = this,
         existingError = null,
         promiseReject = noop,
+        lastClientURL = '',
         rpcClientRes = null;
     if (typeof params === 'function') {
         callback = params;
@@ -191,6 +191,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
                             }
                             targetReject(clientErr);
                         });
+                        lastClientURL = rpcClientRes.clientURL;
                     });
                 }
                 resolveNext(0, null);
@@ -212,6 +213,11 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
         throw err;
     });
     rpcClientRes = new RPCClientResult(errFn, promise);
+    Object.defineProperty(rpcClientRes, 'clientURL', {
+        get: function() {
+            return lastClientURL;
+        }
+    });
     return rpcClientRes;
 
 };
