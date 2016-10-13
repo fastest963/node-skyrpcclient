@@ -1,6 +1,6 @@
 ## Changelog ##
 
-### 0.4.0 ###
+### 1.0.0 ###
 * Clone targets before passing to preprocess function
 
 ### 0.3.0 ###
