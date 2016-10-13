@@ -1,5 +1,8 @@
 ## Changelog ##
 
+### 0.4.0 ###
+* Clone targets before passing to preprocess function
+
 ### 0.3.0 ###
 * Added fallback on DNS failure
 * Update to latest srvclient

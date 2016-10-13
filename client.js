@@ -59,7 +59,8 @@ SkyRPCClient.prototype.resolve = function(cache, cb) {
                 reject(err || (new Error('error looking up ' + this.hostname)));
                 return;
             }
-            this.targets = this.preprocess(targets);
+            // we must clone all of the targets in case the preprocessor modifies the target
+            this.targets = this.preprocess(targets.map(function(t){ return t.clone(); }));
             resolve(this.targets);
         }.bind(this));
     }.bind(this)).then(function(res) {

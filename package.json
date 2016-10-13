@@ -12,7 +12,7 @@
   "dependencies": {
     "modulelog": "^0.2.2",
     "rpclib": "^0.4.0",
-    "srvclient": "^0.1.0"
+    "srvclient": "^1.0.1"
   },
   "scripts": {
     "test": "nodeunit tests"
