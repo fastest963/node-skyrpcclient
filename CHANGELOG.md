@@ -1,5 +1,8 @@
 ## Changelog ##
 
+### 1.0.2 ###
+* Require latest verison of rpclib
+
 ### 1.0.1 ###
 * Added options to call so you can send an object with extra headers
 

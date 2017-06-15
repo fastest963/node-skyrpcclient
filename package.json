@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "modulelog": "^0.2.2",
-    "rpclib": "^0.4.0",
+    "rpclib": "^0.4.1",
     "srvclient": "^1.0.1"
   },
   "scripts": {
