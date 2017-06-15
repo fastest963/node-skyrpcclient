@@ -76,7 +76,7 @@ SkyRPCClient.prototype.resolve = function(cache, cb) {
     });
 };
 
-SkyRPCClient.prototype.call = function(name, params, cb) {
+SkyRPCClient.prototype.call = function(name, params, cb, opts) {
     var callback = cb,
         parameters = params,
         ended = false,
@@ -84,7 +84,8 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
         existingError = null,
         promiseReject = noop,
         lastClientURL = '',
-        rpcClientRes = null;
+        rpcClientRes = null,
+        options = opts || {};
     if (typeof params === 'function') {
         callback = params;
         parameters = null;
@@ -184,7 +185,7 @@ SkyRPCClient.prototype.call = function(name, params, cb) {
                         var url = 'http://' + address + ':' + target.port + '/';
                         Log.debug('skyRPCClient resolved address', {url: url, hostname: client.hostname});
                         client.rpcClient.setEndpoint(url);
-                        rpcClientRes = client.rpcClient.call(name, parameters).then(targetResolve).catch(function(clientErr) {
+                        rpcClientRes = client.rpcClient.call(name, parameters, null, options).then(targetResolve).catch(function(clientErr) {
                             if (clientErr.type === 'http' || clientErr.type === 'json') {
                                 Log.warn('skyRPCClient error connecting to service', {error: clientErr, url: url, method: name});
                                 resolveNext(index + 1, clientErr);

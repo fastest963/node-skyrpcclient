@@ -1,5 +1,8 @@
 ## Changelog ##
 
+### 1.0.1 ###
+* Added options to call so you can send an object with extra headers
+
 ### 1.0.0 ###
 * Clone targets before passing to preprocess function
 
